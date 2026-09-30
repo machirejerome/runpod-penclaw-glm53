@@ -29,6 +29,8 @@ fail() {
     local rc=$?
     printf 'failed\n' > "${STATUS_ROOT}/stage.txt"
     printf '[%s] FAILED rc=%s line=%s\n' "$(date -u +%FT%TZ)" "$rc" "${BASH_LINENO[0]:-unknown}" | tee -a "$LOG_FILE"
+    printf '%s\n' '--- last log lines ---' >&2
+    tail -n 120 "$LOG_FILE" >&2 || true
     exit "$rc"
 }
 trap fail ERR
@@ -49,11 +51,15 @@ apt-get install -y --no-install-recommends \
     build-essential ca-certificates cmake curl git libcurl4-openssl-dev \
     python3 python3-pip python3-venv >>"$LOG_FILE" 2>&1
 
-python3 -m venv /opt/penclaw-venv
+if [[ ! -x /opt/penclaw-venv/bin/python ]]; then
+    python3 -m venv /opt/penclaw-venv
+fi
 /opt/penclaw-venv/bin/pip install -U pip 'huggingface_hub[cli,hf_xet]' >>"$LOG_FILE" 2>&1
 
 status build "Building pinned llama.cpp conversion and quantization tools"
-git clone --filter=blob:none https://github.com/ggml-org/llama.cpp "$LLAMA_DIR" >>"$LOG_FILE" 2>&1
+if [[ ! -d "$LLAMA_DIR/.git" ]]; then
+    git clone --filter=blob:none https://github.com/ggml-org/llama.cpp "$LLAMA_DIR" >>"$LOG_FILE" 2>&1
+fi
 git -C "$LLAMA_DIR" checkout --detach "$LLAMA_COMMIT" >>"$LOG_FILE" 2>&1
 /opt/penclaw-venv/bin/pip install -r "$LLAMA_DIR/requirements/requirements-convert_hf_to_gguf.txt" >>"$LOG_FILE" 2>&1
 cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" \
@@ -65,9 +71,13 @@ cmake --build "$LLAMA_DIR/build" --config Release -j"$(nproc)" \
 status download "Downloading only the final root BF16 checkpoint (not research subdirectories)"
 /opt/penclaw-venv/bin/hf download "$SOURCE_REPO" \
     --local-dir "$SOURCE_DIR" \
-    --include 'model-*.safetensors' 'model.safetensors.index.json' \
-      'config.json' 'generation_config.json' 'tokenizer.json' \
-      'tokenizer_config.json' 'chat_template.jinja' \
+    --include 'model-*.safetensors' \
+    --include 'model.safetensors.index.json' \
+    --include 'config.json' \
+    --include 'generation_config.json' \
+    --include 'tokenizer.json' \
+    --include 'tokenizer_config.json' \
+    --include 'chat_template.jinja' \
     >>"$LOG_FILE" 2>&1
 
 /opt/penclaw-venv/bin/hf download "$IMATRIX_REPO" imatrix.gguf \
