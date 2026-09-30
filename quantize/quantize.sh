@@ -71,13 +71,7 @@ cmake --build "$LLAMA_DIR/build" --config Release -j"$(nproc)" \
 status download "Downloading only the final root BF16 checkpoint (not research subdirectories)"
 /opt/penclaw-venv/bin/hf download "$SOURCE_REPO" \
     --local-dir "$SOURCE_DIR" \
-    --include 'model-*.safetensors' \
-    --include 'model.safetensors.index.json' \
-    --include 'config.json' \
-    --include 'generation_config.json' \
-    --include 'tokenizer.json' \
-    --include 'tokenizer_config.json' \
-    --include 'chat_template.jinja' \
+    --exclude 'iter*/*' \
     >>"$LOG_FILE" 2>&1
 
 /opt/penclaw-venv/bin/hf download "$IMATRIX_REPO" imatrix.gguf \
